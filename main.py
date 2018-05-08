@@ -40,6 +40,7 @@ class LabelTool():
         self.imagename = ''
         self.labelfilename = ''
         self.tkimg = None
+        self.imagescale = 1.0
 
         # initialize mouse state
         self.STATE = {}
@@ -131,9 +132,9 @@ class LabelTool():
 ##            return
         # get image list
         self.imageDir = os.path.join(r'./Images', '%03d' %(self.category))
-        self.imageList = glob.glob(os.path.join(self.imageDir, '*.JPEG'))
+        self.imageList = glob.glob(os.path.join(self.imageDir, '*'))
         if len(self.imageList) == 0:
-            print 'No .JPEG images found in the specified dir!'
+            print 'No .jpg images found in the specified dir!'
             return
 
         # default to the 1st image in the collection
@@ -145,24 +146,6 @@ class LabelTool():
         if not os.path.exists(self.outDir):
             os.mkdir(self.outDir)
 
-        # load example bboxes
-        self.egDir = os.path.join(r'./Examples', '%03d' %(self.category))
-        if not os.path.exists(self.egDir):
-            return
-        filelist = glob.glob(os.path.join(self.egDir, '*.JPEG'))
-        self.tmp = []
-        self.egList = []
-        random.shuffle(filelist)
-        for (i, f) in enumerate(filelist):
-            if i == 3:
-                break
-            im = Image.open(f)
-            r = min(SIZE[0] / im.size[0], SIZE[1] / im.size[1])
-            new_size = int(r * im.size[0]), int(r * im.size[1])
-            self.tmp.append(im.resize(new_size, Image.ANTIALIAS))
-            self.egList.append(ImageTk.PhotoImage(self.tmp[-1]))
-            self.egLabels[i].config(image = self.egList[-1], width = SIZE[0], height = SIZE[1])
-
         self.loadImage()
         print '%d images loaded from %s' %(self.total, s)
 
@@ -170,7 +153,16 @@ class LabelTool():
         # load image
         imagepath = self.imageList[self.cur - 1]
         self.img = Image.open(imagepath)
-        self.tkimg = ImageTk.PhotoImage(self.img)
+
+        self.imagescale = 1.0
+
+        # calculate the scale factor.
+        if max(self.img.height, self.img.width) > 1280:
+            self.imagescale = max(self.img.height, self.img.width) / 1280.0
+
+        scaledimg = self.img.resize((int(self.img.width / self.imagescale), int(self.img.height / self.imagescale)), Image.ANTIALIAS)
+
+        self.tkimg = ImageTk.PhotoImage(scaledimg)
         self.mainPanel.config(width = max(self.tkimg.width(), 400), height = max(self.tkimg.height(), 400))
         self.mainPanel.create_image(0, 0, image = self.tkimg, anchor=NW)
         self.progLabel.config(text = "%04d/%04d" %(self.cur, self.total))
@@ -190,8 +182,8 @@ class LabelTool():
                     tmp = [int(t.strip()) for t in line.split()]
 ##                    print tmp
                     self.bboxList.append(tuple(tmp))
-                    tmpId = self.mainPanel.create_rectangle(tmp[0], tmp[1], \
-                                                            tmp[2], tmp[3], \
+                    tmpId = self.mainPanel.create_rectangle(tmp[0] / self.imagescale, tmp[1] / self.imagescale, \
+                                                            tmp[2] / self.imagescale, tmp[3] / self.imagescale, \
                                                             width = 2, \
                                                             outline = COLORS[(len(self.bboxList)-1) % len(COLORS)])
                     self.bboxIdList.append(tmpId)
@@ -212,10 +204,10 @@ class LabelTool():
         else:
             x1, x2 = min(self.STATE['x'], event.x), max(self.STATE['x'], event.x)
             y1, y2 = min(self.STATE['y'], event.y), max(self.STATE['y'], event.y)
-            self.bboxList.append((x1, y1, x2, y2))
+            self.bboxList.append((int(x1 * self.imagescale), int(y1 * self.imagescale), int(x2 * self.imagescale), int(y2 * self.imagescale)))
             self.bboxIdList.append(self.bboxId)
             self.bboxId = None
-            self.listbox.insert(END, '(%d, %d) -> (%d, %d)' %(x1, y1, x2, y2))
+            self.listbox.insert(END, '(%d, %d) -> (%d, %d)' %(x1 * self.imagescale, y1 * self.imagescale, x2 * self.imagescale, y2 * self.imagescale))
             self.listbox.itemconfig(len(self.bboxIdList) - 1, fg = COLORS[(len(self.bboxIdList) - 1) % len(COLORS)])
         self.STATE['click'] = 1 - self.STATE['click']
 
